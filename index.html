@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Global Live Converter Pro</title>
+    <script src="config.js"></script>
     <style>
         :root { --primary: #6366f1; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --input-bg: #334155; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 20px; margin: 0; }
@@ -12,17 +13,14 @@
         .form-group { margin-bottom: 20px; position: relative; }
         label { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
         input, select { width: 100%; padding: 14px; border: 1px solid #475569; background: var(--input-bg); color: white; border-radius: 12px; font-size: 16px; box-sizing: border-box; outline: none; }
-        input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
-        #searchBar { margin-bottom: 5px; border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 1px solid #1e293b; }
+        input:focus { border-color: var(--primary); }
+        #searchBar { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 1px solid #1e293b; }
         #currencyList { border-top-left-radius: 0; border-top-right-radius: 0; height: 160px; }
         .result-box { margin-top: 24px; padding: 24px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border-radius: 20px; text-align: center; }
         .usd-val { font-size: 42px; font-weight: 800; }
         .status { font-size: 11px; text-align: center; margin-top: 15px; color: #64748b; }
         .btn-clear { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 10px; font-weight: 700; cursor: pointer; float: right; margin-top: -32px; }
-        
-        /* Tooltip Style */
         .info-btn { background: #475569; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 12px; cursor: pointer; margin-left: 5px; vertical-align: middle; line-height: 18px; text-align: center; display: inline-block; }
-        .info-btn:hover { background: var(--primary); }
     </style>
 </head>
 <body>
@@ -56,10 +54,8 @@
 </div>
 
 <script>
-    // SECURITY: This script will first check for a local variable. 
-    // If not found, it will ask you. This keeps the key out of the code bots see.
+    // Security check: Use key from config.js or prompt user
     let API_KEY = window.MY_SAFE_KEY || ""; 
-    
     let rates = {};
     let currencyNames = {};
 
@@ -67,30 +63,39 @@
         alert("💡 Travel Tip:\n\n• Bank fees for cards are usually 3-5%.\n• If you are paying in CASH, set this to 0.");
     }
 
-    function getFlag(code) {
-        if (code === 'EUR') return '🇪🇺';
-        try {
-            return code.substring(0, 2).toUpperCase().replace(/./g, char => 
-                String.fromCodePoint(char.charCodeAt(0) + 127397)
-            );
-        } catch(e) { return '🌐'; }
-    }
-
     async function initApp() {
-        // If no key is found in config.js, ask the user once
+        const statusEl = document.getElementById('updateStatus');
+        
         if (!API_KEY) {
-            API_KEY = prompt("Please enter your API Key to enable live rates (Bots can't see this!):");
+            API_KEY = prompt("Enter your API Key (It's not in the code, so it's safe from bots!):");
             if (!API_KEY) {
-                document.getElementById('updateStatus').innerText = "⚠️ No API Key: Using Offline Rates";
+                statusEl.innerText = "❌ No Key: App Disabled";
                 return;
             }
         }
 
         try {
-            const codesRes = await fetch(`https://v6.exchangerate-api.com/v6/${API_KEY}/codes`);
-            const codesData = await codesRes.json();
-            if (codesData.result === "success") {
-                codesData.supported_codes.forEach(pair => currencyNames[pair[0]] = pair[1]);
-            }
+            statusEl.innerText = "⏳ Loading live rates...";
+            const res = await fetch(`https://v6.exchangerate-api.com/v6/${API_KEY}/latest/USD`);
+            const data = await res.json();
 
-            const ratesRes = await fetch(`https://v6.exchangerate
+            if (data.result === "success") {
+                rates = data.conversion_rates;
+                // Get currency names from the 'codes' endpoint for better display
+                const codesRes = await fetch(`https://v6.exchangerate-api.com/v6/${API_KEY}/codes`);
+                const codesData = await codesRes.json();
+                codesData.supported_codes.forEach(p => currencyNames[p[0]] = p[1]);
+
+                statusEl.innerText = "✅ 161 Countries Live";
+                renderList();
+            } else {
+                statusEl.innerText = "❌ API Error: Check Key";
+            }
+        } catch (e) {
+            statusEl.innerText = "❌ Connection Failed";
+        }
+    }
+
+    function renderList() {
+        const select = document.getElementById('currencyList');
+        const search = document.getElementById('searchBar').value
