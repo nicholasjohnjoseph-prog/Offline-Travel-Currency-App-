@@ -11,14 +11,18 @@
         h2 { margin-top: 0; font-size: 22px; color: var(--primary); text-align: center; }
         .form-group { margin-bottom: 20px; position: relative; }
         label { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-        input, select { width: 100%; padding: 14px; border: 1px solid #475569; background: var(--input-bg); color: white; border-radius: 12px; font-size: 16px; box-sizing: border-box; outline: none; transition: 0.2s; }
+        input, select { width: 100%; padding: 14px; border: 1px solid #475569; background: var(--input-bg); color: white; border-radius: 12px; font-size: 16px; box-sizing: border-box; outline: none; }
         input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
         #searchBar { margin-bottom: 5px; border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 1px solid #1e293b; }
         #currencyList { border-top-left-radius: 0; border-top-right-radius: 0; height: 160px; cursor: pointer; }
-        .result-box { margin-top: 24px; padding: 24px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border-radius: 20px; text-align: center; box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3); }
+        .result-box { margin-top: 24px; padding: 24px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border-radius: 20px; text-align: center; }
         .usd-val { font-size: 42px; font-weight: 800; }
         .status { font-size: 11px; text-align: center; margin-top: 15px; color: #64748b; }
         .btn-clear { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 10px; font-weight: 700; cursor: pointer; float: right; margin-top: -32px; }
+        
+        /* Bank Fee Info Button */
+        .info-btn { background: #475569; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 12px; cursor: pointer; margin-left: 5px; vertical-align: middle; line-height: 18px; text-align: center; display: inline-block; font-weight: bold; }
+        .info-btn:hover { background: var(--primary); }
     </style>
 </head>
 <body>
@@ -27,8 +31,8 @@
     <h2>Global Converter 🌐</h2>
     
     <div class="form-group">
-        <label>Find Country</label>
-        <input type="text" id="searchBar" placeholder="Search (e.g. India, Japan)..." oninput="renderList()">
+        <label>Find Country / Currency</label>
+        <input type="text" id="searchBar" placeholder="Search (e.g. India, Japan, Euro)..." oninput="renderList()">
         <select id="currencyList" size="5" onchange="convert()"></select>
     </div>
 
@@ -39,7 +43,7 @@
     </div>
 
     <div class="form-group">
-        <label>Bank Fee %</label>
+        <label>Bank Fee % <button class="info-btn" onclick="showFeeInfo()">?</button></label>
         <input type="number" id="fee" value="3" oninput="convert()" inputmode="numeric">
     </div>
 
@@ -48,37 +52,43 @@
         <div class="fee-label" style="font-size: 12px; font-weight: 600;">TOTAL USD OUTFLOW</div>
     </div>
 
-    <div id="updateStatus" class="status">Connecting to infinite API...</div>
+    <div id="updateStatus" class="status">Syncing global rates...</div>
 </div>
 
 <script>
     let rates = {};
     let currencyNames = {};
 
-    // Helper to generate flag from code
+    function showFeeInfo() {
+        alert("💡 Travel Tip:\n\n• Bank fees for cards are usually 3-5%.\n• If you are paying in CASH, set this to 0.");
+    }
+
     function getFlag(code) {
         if (code === 'eur') return '🇪🇺';
-        return code.toUpperCase().replace(/./g, char => 
-            String.fromCodePoint(char.charCodeAt(0) + 127397)
-        );
+        try {
+            return code.toUpperCase().replace(/./g, char => 
+                String.fromCodePoint(char.charCodeAt(0) + 127397)
+            );
+        } catch(e) { return '🌐'; }
     }
 
     async function initApp() {
         const statusEl = document.getElementById('updateStatus');
         try {
-            // 1. Fetch Currency Names
-            const namesRes = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies.json');
-            currencyNames = await namesRes.json();
+            // Fetch Names & Rates from the Free/Infinite API
+            const [namesRes, ratesRes] = await Promise.all([
+                fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies.json'),
+                fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json')
+            ]);
 
-            // 2. Fetch Rates (USD based)
-            const ratesRes = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
+            currencyNames = await namesRes.json();
             const data = await ratesRes.json();
-            
             rates = data.usd;
-            statusEl.innerText = "✅ Infinite Mode Active (Daily Rates)";
+
+            statusEl.innerText = "✅ Rates Updated Successfully";
             renderList();
         } catch (error) {
-            statusEl.innerText = "❌ Offline / Connection Error";
+            statusEl.innerText = "❌ Connection Failed";
             console.error(error);
         }
     }
@@ -89,17 +99,16 @@
         const currentSelection = select.value || "inr"; 
         select.innerHTML = "";
         
-        // Sort codes alphabetically
         const sortedCodes = Object.keys(rates).sort();
 
         sortedCodes.forEach(code => {
             const name = currencyNames[code] || code.toUpperCase();
             const displayText = `${name} (${code.toUpperCase()})`;
             
-            if (displayText.toLowerCase().includes(search) || code.toLowerCase().includes(search)) {
+            // Search logic looks at Name and Code
+            if (displayText.toLowerCase().includes(search)) {
                 const option = document.createElement('option');
                 option.value = code;
-                // Add flag and name
                 option.innerText = `${getFlag(code.substring(0,2))} ${displayText}`;
                 if (code === currentSelection) option.selected = true;
                 select.appendChild(option);
@@ -114,7 +123,6 @@
         const feePercent = parseFloat(document.getElementById('fee').value) || 0;
 
         if (rates[currencyCode]) {
-            // This API gives: 1 USD = X Currency. So we divide.
             const baseUSD = localAmount / rates[currencyCode];
             const totalUSD = baseUSD * (1 + (feePercent / 100));
             document.getElementById('totalUSD').innerText = '$' + totalUSD.toLocaleString(undefined, {
